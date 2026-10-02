@@ -1,0 +1,70 @@
+---
+author: Chanice McKenzie
+output: html_document
+title: "DATA 607 Week 5A Approach"
+---
+
+# Introduction
+
+This assignment will examine arrival-delay performance for two airlines
+across five destinations. The goal is to move from the original
+wide-format table to a tidy dataset that can be used to compare airline
+performance both overall and within each destination. An important part
+of the analysis will be determining whether the overall comparison tells
+the same story as the city-by-city comparisons.
+
+# Planned Approach
+
+I will first recreate the provided airline-delay table in a CSV file
+using the same general wide structure as the source. I will preserve the
+empty cells from the original data as missing values rather than
+replacing them while creating the file. The CSV will then be placed in a
+public GitHub repository so the final R Markdown analysis can read the
+data from an internet-accessible source and remain reproducible.
+
+After importing the data into R, I will inspect the structure, column
+names, data types, and missing values before making transformations. I
+plan to use `tidyr` and `dplyr` to reshape the data from wide to long
+format so that airline, destination, arrival status, and flight count
+can be represented as separate variables. Missing observations will be
+handled explicitly in the analysis rather than being silently ignored.
+
+Once the data is tidy, I will first examine counts to confirm that the
+transformed data still represents the information in the original table.
+I will then calculate percentages so that the two airlines can be
+compared fairly even if they have different numbers of flights. The
+analysis will compare the percentage of delayed or on-time arrivals for
+the two airlines overall and then repeat the comparison separately for
+each of the five destinations. Tables and/or visualizations will be used
+to make these comparisons clear.
+
+Finally, I will compare the overall results with the destination-level
+results. If the overall airline comparison differs from the city-by-city
+comparisons, I will describe the discrepancy and investigate how
+differences in the number or distribution of flights across destinations
+may contribute to it. The conclusion will summarize what the percentages
+show about the two airlines and explain why examining both aggregated
+and destination-level results is important.
+
+# Anticipated Data Challenges
+
+One challenge will be preserving the structure of the original table
+while still representing its empty cells correctly as missing data. I
+will need to distinguish a truly missing value from a count of zero
+because those values have different meanings. I will also need to verify
+that the wide-to-long transformation does not duplicate, drop, or
+mislabel any observations.
+
+Another challenge is making a fair comparison between the airlines. Raw
+delay counts alone may be misleading if one airline has more flights
+overall or serves a different number of flights to each destination. For
+that reason, the main comparisons will use percentages rather than
+counts alone. I will also check totals before and after tidying to make
+sure the transformation has not changed the underlying data.
+
+A final challenge is interpreting a possible difference between the
+overall and city-level results. An airline could appear to perform
+better overall while showing a different pattern when the destinations
+are examined separately. I will avoid drawing conclusions from the
+overall percentages alone and will use the destination-level percentages
+to explain any discrepancy.
