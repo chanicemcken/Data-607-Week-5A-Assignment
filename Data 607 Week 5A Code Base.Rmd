@@ -1,0 +1,245 @@
+---
+title: "DATA 607 Week 5A Code Base"
+author: "Chanice McKenzie"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: show
+  pdf_document:
+    toc: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  warning = FALSE,
+  message = FALSE,
+  fig.align = "center"
+)
+```
+
+# Introduction
+
+The data for this analysis comes from the airline arrival-delay table provided in the assignment, originally sourced from Numbersense by Kaiser Fung (McGraw Hill, 2013). I recreated the table as a CSV and hosted it in my GitHub repository so the analysis can be reproduced from an internet-accessible source. (https://chanicemcken.github.io/Data-607-Week-5A-Assignment/airline_delays.csv). The main question is whether the airline with the better overall delay rate also performs better when the five destinations are compared individually.
+
+# Load Packages
+
+I use `tidyverse` for importing, cleaning, transforming, and visualizing the data, and `knitr` for displaying formatted tables.
+
+```{r packages}
+library(tidyverse)
+library(knitr)
+```
+
+# Import the Data
+
+The CSV recreates the original assignment table in wide format. The airline name is intentionally missing on the second row for each airline because the original source table uses a blank cell rather than repeating the airline name. Reading the file from a public URL instead of a local path makes the analysis reproducible on another computer.
+
+```{r import-data}
+airline_url <- "https://chanicemcken.github.io/Data-607-Week-5A-Assignment/airline_delays.csv"
+
+airline_raw <- read_csv(
+  airline_url,
+  na = c("", "NA", "(blank)"),
+  show_col_types = FALSE
+)
+
+airline_raw
+```
+
+# Inspect the Original Data
+
+Before cleaning the data, I inspect its structure and count the missing values. This confirms that the blank airline cells are being recognized as missing rather than as valid airline names.
+
+```{r inspect-data}
+glimpse(airline_raw)
+
+missing_values <- airline_raw %>%
+  summarise(across(everything(), ~ sum(is.na(.))))
+
+kable(missing_values, caption = "Missing Values in the Original CSV")
+```
+
+# Populate the Missing Airline Names
+
+The missing airline values are a result of the visual layout of the original table, not unknown observations. I use `fill()` to carry the most recent airline name downward so that every row contains an airline value before reshaping the data.
+
+```{r fill-missing}
+airline_clean <- airline_raw %>%
+  fill(Airline, .direction = "down")
+
+airline_clean
+```
+
+# Transform the Data From Wide to Long Format
+
+The five destinations are currently stored as separate columns. I use `pivot_longer()` to convert those city columns into two variables: `Destination` and `Flights`. After this transformation, each row represents one airline, one arrival status, one destination, and its flight count.
+
+```{r wide-to-long}
+airline_long <- airline_clean %>%
+  pivot_longer(
+    cols = -c(Airline, Status),
+    names_to = "Destination",
+    values_to = "Flights"
+  ) %>%
+  mutate(
+    Airline = recode(
+  Airline,
+  "ALASKA" = "Alaska",
+  "AM WEST" = "AM West"
+),
+    Status = str_to_lower(Status)
+  )
+
+airline_long
+```
+
+# Count Analysis and Validation
+
+Before calculating percentages, I summarize the counts by airline and arrival status. I also verify that the total number of flights is unchanged after transforming the data from wide to long format.
+
+```{r count-analysis}
+count_summary <- airline_long %>%
+  group_by(Airline, Status) %>%
+  summarise(Flights = sum(Flights), .groups = "drop")
+
+kable(
+  count_summary,
+  caption = "Flight Counts by Airline and Arrival Status"
+)
+
+wide_total <- airline_clean %>%
+  select(-Airline, -Status) %>%
+  unlist() %>%
+  sum(na.rm = TRUE)
+
+long_total <- sum(airline_long$Flights, na.rm = TRUE)
+
+validation <- tibble(
+  Check = c("Total flights in wide data", "Total flights in long data"),
+  Flights = c(wide_total, long_total)
+)
+
+kable(validation, caption = "Validation of Flight Totals")
+```
+
+# Overall Airline Comparison
+
+Because the airlines have different numbers of flights, raw delay counts alone are not a fair comparison. I calculate the percentage of flights that were delayed and on time for each airline.
+
+```{r overall-performance}
+overall_performance <- airline_long %>%
+  group_by(Airline, Status) %>%
+  summarise(Flights = sum(Flights), .groups = "drop_last") %>%
+  mutate(
+    Total_Flights = sum(Flights),
+    Percentage = 100 * Flights / Total_Flights
+  ) %>%
+  ungroup()
+
+kable(
+  overall_performance,
+  digits = 2,
+  caption = "Overall Arrival Performance by Airline"
+)
+```
+
+```{r overall-chart, fig.width=8, fig.height=5}
+overall_performance %>%
+  filter(Status == "delayed") %>%
+  ggplot(aes(x = Airline, y = Percentage, fill = Airline)) +
+  geom_col(width = 0.6, show.legend = FALSE) +
+  geom_text(
+    aes(label = paste0(round(Percentage, 1), "%")),
+    vjust = -0.4
+  ) +
+  labs(
+    title = "Overall Percentage of Flights Delayed",
+    x = NULL,
+    y = "Delayed Flights (%)"
+  ) +
+  theme_minimal()
+```
+
+Overall, Alaska has a delay rate of about 13.27%, while AM West has a lower overall delay rate of about 10.89%. Based only on the aggregate percentages, AM West appears to have better arrival performance. However, the destination-level comparison below shows why the overall result does not tell the full story.
+
+# Compare Delay Percentages Across the Five Cities
+
+Next, I calculate the delay percentage separately for each airline and destination. This allows the airlines to be compared within the same city rather than combining destinations that have very different numbers of flights.
+
+```{r city-performance}
+city_performance <- airline_long %>%
+  group_by(Airline, Destination) %>%
+  mutate(Total_Flights = sum(Flights)) %>%
+  ungroup() %>%
+  mutate(Percentage = 100 * Flights / Total_Flights) %>%
+  filter(Status == "delayed") %>%
+  select(Airline, Destination, Delayed_Flights = Flights,
+         Total_Flights, Delay_Percentage = Percentage)
+
+kable(
+  city_performance,
+  digits = 2,
+  caption = "Delay Percentages by Airline and Destination"
+)
+```
+
+```{r city-delay-chart, fig.width=8, fig.height=5, out.width="90%", fig.align="center"}
+
+ggplot(
+  city_performance,
+  aes(x = Destination, y = Delay_Percentage, fill = Airline)
+) +
+  geom_col(position = position_dodge(width = 0.8), width = 0.7) +
+  labs(
+    title = "Delay Percentages by Airline and Destination",
+    x = NULL,
+    y = "Delayed Flights (%)",
+    fill = "Airline"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 30, hjust = 1),
+    plot.title = element_text(size = 12)
+  )
+```
+
+The city-level percentages show a different pattern from the overall comparison. Alaska has a lower delay percentage than AM West in all five destinations: Los Angeles, Phoenix, San Diego, San Francisco, and Seattle. Therefore, looking only at the overall percentages would lead to a different impression than comparing the airlines within each destination.
+
+# Overall and City-Level Discrepancy
+
+To understand why the results reverse, I examine how each airline's flights are distributed across the five destinations. A destination with many flights contributes much more to an airline's overall delay percentage than a destination with relatively few flights.
+
+```{r flight-distribution}
+flight_distribution <- airline_long %>%
+  group_by(Airline, Destination) %>%
+  summarise(Flights = sum(Flights), .groups = "drop_last") %>%
+  mutate(
+    Airline_Total = sum(Flights),
+    Share_of_Airline_Flights = 100 * Flights / Airline_Total
+  ) %>%
+  ungroup()
+
+kable(
+  flight_distribution,
+  digits = 2,
+  caption = "Distribution of Each Airline's Flights Across Destinations"
+)
+```
+
+AM West has a very large share of its flights in Phoenix, where both airlines have relatively low delay rates. Alaska, in contrast, has a large share of its flights in Seattle, where delay rates are higher. Because the overall percentages are weighted by the number of flights in each city, AM West's large number of Phoenix flights pulls its overall delay percentage downward. This produces a reversal in which AM West looks better overall even though Alaska has the lower delay percentage in every individual city. This is an example of why aggregated results should be interpreted together with subgroup comparisons.
+
+# Conclusions
+
+The analysis shows that AM West has the lower overall delay percentage, approximately 10.89% compared with Alaska's 13.27%. However, Alaska has the lower delay percentage in every one of the five destinations. The discrepancy occurs because the airlines do not have the same distribution of flights across cities, so cities with more flights have a greater effect on each airline's overall percentage.
+
+Based on these results, I would not evaluate airline performance using the overall rate alone. Comparing percentages within destination provides important context and prevents the unequal distribution of flights from hiding the city-level pattern. An extension of this analysis could include additional airlines, destinations, or time periods to determine whether the same relationship continues with a larger dataset.
+
+# Reproducibility Information
+
+The data is imported directly from an internet-accessible CSV, so the analysis does not depend on files stored locally on my computer. I include the R session information below to document the environment and package versions used to render the report.
+
+```{r session-info}
+sessionInfo()
+```
